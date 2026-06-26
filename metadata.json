@@ -1,0 +1,6 @@
+{
+  "name": "Effer Corporate Workspace",
+  "description": "An elegant, Apple-inspired operational suite featuring smart project tracking, corporate policy alignment, asset scheduling, OKR management, and Gemini-powered decision intelligence.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
