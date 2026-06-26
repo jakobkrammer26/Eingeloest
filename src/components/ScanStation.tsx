@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { FamilyProduct, ScanLog } from '../types';
 import { 
   QrCode, 
@@ -120,7 +120,21 @@ export default function ScanStation({
       }
 
       if (!html5QrCodeRef.current) {
-        html5QrCodeRef.current = new Html5Qrcode(containerId);
+        // Explicitly enable standard 1D barcode formats and 2D formats for lightning-fast parsing
+        html5QrCodeRef.current = new Html5Qrcode(containerId, {
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.ITF
+          ],
+          verbose: false
+        });
       }
 
       const qrCodeSuccessCallback = (decodedText: string) => {
@@ -133,9 +147,9 @@ export default function ScanStation({
       };
 
       const config = {
-        fps: 15, // Snappier frame rates for fast real-time barcode evaluation
+        fps: 24, // High frame rate (24 FPS) to make scan feedback snappy and instantaneous
         qrbox: (width: number, height: number) => {
-          // A wider rectangle box is perfect for 1D barcodes and QR codes
+          // A wider horizontal rectangle box is optimized for 1D barcodes and medicine UPC codes
           const boxWidth = Math.floor(width * 0.85);
           const boxHeight = Math.max(Math.floor(height * 0.45), 110);
           
@@ -147,16 +161,38 @@ export default function ScanStation({
         aspectRatio: 1.333333
       };
 
-      const cameraTarget = selectedCameraId || { facingMode: "environment" };
+      // Try starting with clear, sharp HD constraints for optimal barcode line recognition
+      try {
+        const highResTarget = selectedCameraId 
+          ? { 
+              deviceId: { exact: selectedCameraId },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+          : { 
+              facingMode: "environment",
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            };
 
-      await html5QrCodeRef.current.start(
-        cameraTarget,
-        config,
-        qrCodeSuccessCallback,
-        () => {
-          // Frame parse failure callbacks can be silent to avoid console spam
-        }
-      );
+        await html5QrCodeRef.current.start(
+          highResTarget,
+          config,
+          qrCodeSuccessCallback,
+          () => {}
+        );
+      } catch (resolutionError) {
+        console.warn("Could not load camera with HD constraints, falling back to basic camera target:", resolutionError);
+        
+        const basicTarget = selectedCameraId || { facingMode: "environment" };
+        await html5QrCodeRef.current.start(
+          basicTarget,
+          config,
+          qrCodeSuccessCallback,
+          () => {}
+        );
+      }
+
       setIsWebcamActive(true);
     } catch (err: any) {
       console.error("Webcam startup failed:", err);
@@ -644,6 +680,30 @@ export default function ScanStation({
                     id="webcam-scanner-viewport" 
                     className="absolute inset-0 w-full h-full [&_video]:object-cover [&_video]:w-full [&_video]:h-full [&_video]:rounded-xl"
                   />
+                  
+                  {/* Real-time laser guide overlay matching the exact 0.85 x 0.45 horizontal qrbox size */}
+                  {isWebcamActive && (
+                    <div className="absolute inset-0 pointer-events-none z-10 flex flex-col items-center justify-center p-4">
+                      {/* Precise horizontal container matching the scan scope */}
+                      <div className="w-[85%] h-[45%] border-2 border-dashed border-emerald-500 rounded-xl relative overflow-hidden flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                        {/* Subtle inner pulse shading */}
+                        <div className="absolute inset-0 bg-emerald-500/5 animate-pulse"></div>
+                        
+                        {/* Laser horizontal bar sweeping down and up using bouncing translation */}
+                        <div className="absolute w-[95%] h-[2px] bg-red-500 shadow-[0_0_10px_#ef4444,0_0_20px_#ef4444] animate-bounce"></div>
+                        
+                        <div className="absolute bottom-2 left-0 right-0 text-center">
+                          <span className="text-[9px] tracking-wider font-bold text-emerald-300 bg-black/75 px-2 py-0.5 rounded uppercase font-mono">
+                            ALIGN BARCODE HERE
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <p className="text-[10px] text-neutral-300 font-medium mt-3 bg-black/60 px-3 py-1 rounded-full text-center">
+                        Hold item steady • Distance ~ 10-15 cm
+                      </p>
+                    </div>
+                  )}
                   
                   {!isWebcamActive && !isWebcamLoading && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 text-neutral-450 z-10 bg-neutral-900 space-y-3">
